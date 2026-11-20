@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Áreas con peligro de inundación · Hidalgo</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+  <!-- Tipografía -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;800&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+
+  <!-- ===== BARRA SUPERIOR ===== -->
+  <header class="barra-superior">
+    <div class="emblema" aria-hidden="true">
+      <svg viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="48" fill="#F47B20"/>
+        <polygon points="50,18 83,74 17,74" fill="#1F3A68"/>
+      </svg>
+    </div>
+    <div class="titulos">
+      <p class="sobretitulo">Protección Civil · Estado de Hidalgo</p>
+      <h1>Áreas con peligro de inundación</h1>
+    </div>
+    <div class="fecha">
+      <span>Fecha de elaboración</span>
+      <time datetime="2026-11-19">19 de noviembre de 2026</time>
+    </div>
+  </header>
+
+  <main class="contenido">
+
+    <!-- ===== BARRA IZQUIERDA ===== -->
+    <aside class="barra-lateral">
+      <h2>Las inundaciones en Hidalgo</h2>
+
+      <p>
+        Hidalgo combina regiones muy distintas: la Huasteca y la Sierra Gorda reciben lluvias
+        abundantes, mientras que el Valle del Mezquital y el Altiplano son más secos pero concentran
+        población, infraestructura y ríos que drenan aguas del Valle de México.
+        Esa diversidad hace que el peligro por inundación esté presente en buena parte del estado.
+      </p>
+
+      <h3>¿Dónde y por qué ocurren?</h3>
+      <ul>
+        <li><strong>Desbordamiento de ríos</strong> como el Tula, Moctezuma, Amajac y Metztitlán,
+          sobre todo en vegas y fondos de valle.</li>
+        <li><strong>Lluvias intensas y ciclones tropicales</strong> entre junio y noviembre,
+          que generan crecidas súbitas en la Sierra y la Huasteca.</li>
+        <li><strong>Encharcamientos urbanos</strong> en Pachuca, Tulancingo, Tula y Tizayuca,
+          donde el drenaje es insuficiente o la mancha urbana ocupó cauces.</li>
+        <li><strong>Escurrimientos de la Zona Metropolitana del Valle de México</strong>,
+          que aumentan el caudal de la cuenca del río Tula.</li>
+      </ul>
+
+      <h3>Un antecedente reciente</h3>
+      <p>
+        En septiembre de 2021 el desbordamiento del río Tula afectó a miles de viviendas en
+        Tula de Allende y municipios vecinos, y mostró la vulnerabilidad de las zonas urbanas
+        asentadas junto a los cauces.
+      </p>
+
+      <h3>Uso de este mapa</h3>
+      <p>
+        Los polígonos en rojo señalan las áreas identificadas con peligro de inundación.
+        Use el selector del mapa o haga clic en un polígono para acercarse a cada zona y
+        reconocer su contexto: localidades, vialidades y cuerpos de agua cercanos.
+      </p>
+
+      <div class="leyenda">
+        <span class="muestra"></span> Área con peligro de inundación
+      </div>
+
+      <div class="datos" id="resumen"></div>
+
+      <p class="nota">
+        Información con fines de planeación y gestión del riesgo. Para emergencias, llame al
+        <strong>911</strong>.
+      </p>
+    </aside>
+
+    <!-- ===== CONTENEDOR DEL MAPA ===== -->
+    <section class="contenedor-mapa">
+      <div id="mapa"></div>
+    </section>
+
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- MapLibre GL + puente para Leaflet (dibuja el estilo vectorial de Maputnik) -->
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js"></script>
+  <!-- Estilo del mapa base exportado de Maputnik -->
+  <script src="mapabase.js"></script>
+  <!-- Polígonos de inundación (convertidos de INUNDACIONES.geojson) -->
+  <script src="inundaciones.js"></script>
+
+  <script>
+    // ---------- Límites del estado de Hidalgo ----------
+    var limitesHidalgo = L.latLngBounds([19.58, -99.90], [21.43, -97.96]);
+
+    var mapa = L.map('mapa', {
+      maxBounds: limitesHidalgo.pad(0.03), // no se puede salir de Hidalgo
+      maxBoundsViscosity: 1.0,
+      zoomSnap: 0.25,
+      maxZoom: 18
+    });
+
+    // Zoom mínimo = el que muestra todo el estado (no deja alejarse más)
+    function ajustarZoomMinimo() {
+      var z = mapa.getBoundsZoom(limitesHidalgo);
+      mapa.setMinZoom(z);
+      return z;
+    }
+    mapa.fitBounds(limitesHidalgo);
+    ajustarZoomMinimo();
+    window.addEventListener('resize', function () {
+      mapa.invalidateSize();
+      ajustarZoomMinimo();
+    });
+
+    // ---------- Mapa base: estilo vectorial de Maputnik ----------
+    var atribucion = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · ' +
+                     '<a href="https://openfreemap.org">OpenFreeMap</a> · OpenMapTiles · Relieve: Mapzen';
+
+    // Fondo (relieve, agua, vialidades, límites) → debajo de los polígonos
+    L.maplibreGL({ style: estiloBase, attribution: atribucion, interactive: false }).addTo(mapa);
+
+    // Etiquetas → en un panel encima de los polígonos, sin bloquear los clics
+    mapa.createPane('etiquetas');
+    mapa.getPane('etiquetas').style.zIndex = 450;
+    mapa.getPane('etiquetas').style.pointerEvents = 'none';
+    L.maplibreGL({ style: estiloEtiquetas, pane: 'etiquetas', interactive: false }).addTo(mapa);
+
+    // ---------- Polígonos de inundación ----------
+    var estiloBase = { color: '#9E1B1B', weight: 1.2, fillColor: '#E3342F', fillOpacity: 0.55 };
+    var estiloResaltado = { color: '#5C0A0A', weight: 3, fillColor: '#FF6A1A', fillOpacity: 0.75 };
+
+    function formatoArea(a) {
+      return a < 0.01 ? '&lt; 0.01 km²' : a.toLocaleString('es-MX', { maximumFractionDigits: 2 }) + ' km²';
+    }
+
+    var capaInundaciones = L.geoJSON(inundaciones, {
+      style: estiloBase,
+      onEachFeature: function (f, capa) {
+        capa.bindPopup(
+          '<strong>Zona de peligro ' + f.properties.id + '</strong><br>' +
+          'Superficie: ' + formatoArea(f.properties.area_km2)
+        );
+        capa.on({
+          mouseover: function () { capa.setStyle(estiloResaltado); },
+          mouseout: function () { capaInundaciones.resetStyle(capa); },
+          click: function () { irAZona(capa); }
+        });
+      }
+    }).addTo(mapa);
+
+    function irAZona(capa) {
+      mapa.flyToBounds(capa.getBounds(), { padding: [60, 60], maxZoom: 15, duration: 1.2 });
+      capa.openPopup();
+    }
+
+    // ---------- Control "Ir a zona" ----------
+    var controlZonas = L.control({ position: 'topright' });
+    controlZonas.onAdd = function () {
+      var div = L.DomUtil.create('div', 'control-zonas');
+      var opciones = '<option value="">Ir a una zona de peligro…</option>';
+      capaInundaciones.eachLayer(function (c) {
+        var p = c.feature.properties;
+        opciones += '<option value="' + L.stamp(c) + '">Zona ' + p.id + ' · ' +
+                    formatoArea(p.area_km2).replace('&lt;', '<') + '</option>';
+      });
+      div.innerHTML =
+        '<label for="selector-zona">Navegar</label>' +
+        '<select id="selector-zona">' + opciones + '</select>' +
+        '<button type="button" id="btn-estado">Ver todo el estado</button>';
+      L.DomEvent.disableClickPropagation(div);
+      L.DomEvent.disableScrollPropagation(div);
+      return div;
+    };
+    controlZonas.addTo(mapa);
+
+    document.getElementById('selector-zona').addEventListener('change', function () {
+      if (this.value) irAZona(capaInundaciones.getLayer(+this.value));
+    });
+    document.getElementById('btn-estado').addEventListener('click', function () {
+      mapa.closePopup();
+      document.getElementById('selector-zona').value = '';
+      mapa.flyToBounds(limitesHidalgo, { duration: 1 });
+    });
+
+    L.control.scale({ imperial: false }).addTo(mapa);
+
+    // ---------- Resumen en la barra lateral ----------
+    var total = inundaciones.features.reduce(function (s, f) { return s + f.properties.area_km2; }, 0);
+    document.getElementById('resumen').innerHTML =
+      '<div><span class="cifra">' + inundaciones.features.length + '</span><span>zonas identificadas</span></div>' +
+      '<div><span class="cifra">' + Math.round(total).toLocaleString('es-MX') + '</span><span>km² en peligro</span></div>';
+  </script>
+</body>
+</html>
